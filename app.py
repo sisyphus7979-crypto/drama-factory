@@ -5,8 +5,8 @@ from itertools import cycle
 from PIL import Image
 import yt_dlp
 
-# --- 설정 ---
-st.set_page_config(page_title="URL Loader Factory", layout="wide")
+# --- 설정 (제목이 바뀌어야 정상입니다) ---
+st.set_page_config(page_title="URL Factory", layout="wide")
 st.title("🔗 URL 영상 추출 & AI 분석 공장")
 
 API_KEYS = [
@@ -46,7 +46,6 @@ tmpdir = tempfile.mkdtemp()
 
 if url and st.button("📥 영상 추출 및 로드"):
     with st.spinner("서버가 영상을 다운로드 중입니다... (PC 용량 사용 X)"):
-        # 480p 정도로 받아서 속도 최적화 (분석용)
         ydl_opts = {
             'outtmpl': os.path.join(tmpdir, 'download.%(ext)s'),
             'format': 'best[ext=mp4]/best',
@@ -56,11 +55,11 @@ if url and st.button("📥 영상 추출 및 로드"):
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=True)
                 video_path = ydl.prepare_filename(info)
-                st.session_state['video_path'] = video_path # 저장
+                st.session_state['video_path'] = video_path
                 st.success(f"✅ 다운로드 성공! (파일: {os.path.basename(video_path)})")
         except Exception as e:
             st.error(f"❌ 다운로드 실패: {e}")
-            st.warning("이 사이트는 보안이 강력해서 추출이 불가능할 수 있습니다. (유튜브 등으로 테스트 해보세요)")
+            st.warning("이 사이트는 보안이 강력해서 추출이 불가능할 수 있습니다.")
 
 # 이미 다운로드된 영상이 있으면 분석 버튼 표시
 if st.session_state.get('video_path'):
@@ -69,7 +68,6 @@ if st.session_state.get('video_path'):
     
     if st.button("🚀 AI 분석 시작"):
         st.divider()
-        # 영상 길이 확인
         try:
             res = subprocess.run([ffmpeg_cmd, '-i', video_path], stderr=subprocess.PIPE, text=True)
             total_duration = int(float(re.search(r"Duration: (\d{2}):(\d{2}):(\d{2})", res.stderr).groups()[0]) * 3600 + float(re.search(r"Duration: (\d{2}):(\d{2}):(\d{2})", res.stderr).groups()[1]) * 60 + float(re.search(r"Duration: (\d{2}):(\d{2}):(\d{2})", res.stderr).groups()[2]))
