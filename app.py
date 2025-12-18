@@ -6,8 +6,8 @@ from PIL import Image
 import yt_dlp
 
 # --- 설정 ---
-st.set_page_config(page_title="FetchV Style Factory", layout="wide")
-st.title("🏭 FetchV 스타일 드라마 공장")
+st.set_page_config(page_title="Advanced Downloader", layout="wide")
+st.title("🏭 고급형 드라마 공장 (403 우회 기능 탑재)")
 
 API_KEYS = [
     "AIzaSyBV9HQYl_oeQBJVWJ4DAiW0rE5BqLFr15I",
@@ -40,38 +40,46 @@ def extract_smart_frames(input_path, output_dir, start_sec, duration=60):
     return [os.path.join(chunk_folder, f) for f in sorted(os.listdir(chunk_folder)) if f.endswith(".jpg")]
 
 # --- 메인 로직 ---
-tab_url, tab_file = st.tabs(["🔗 URL (m3u8 지원)", "📂 파일 선택"])
+tab_url, tab_file = st.tabs(["🔗 고급 URL 추출", "📂 파일 선택 (Resume)"])
 video_path = None
 progress_dir = "analysis_progress"
 if not os.path.exists(progress_dir): os.makedirs(progress_dir)
 
-# [핵심 변경] FetchV 처럼 브라우저 위장 다운로드
+# [핵심] 403 에러 우회를 위한 Referer 입력 추가
 with tab_url:
-    st.info("💡 팁: 일반 주소가 안 되면, FetchV에 뜨는 '.m3u8' 주소를 복사해서 넣어보세요.")
-    url_input = st.text_input("영상 주소 (또는 m3u8 주소)", key="url_input")
+    st.info("💡 팁: 'm3u8 주소'와 영상을 보고 있던 '웹사이트 주소'를 둘 다 넣어야 뚫립니다.")
     
-    if url_input and st.button("📥 브라우저 모드로 추출"):
-        with st.spinner("브라우저인 척 위장하여 접근 중..."):
-            # FetchV 방식: 헤더를 조작하여 차단 우회
-            ydl_opts = {
-                'outtmpl': os.path.join(tempfile.gettempdir(), 'download.%(ext)s'),
-                'format': 'best',
-                'noplaylist': True,
-                # [중요] 봇 탐지 회피용 헤더 설정
-                'http_headers': {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'Referer': url_input,
-                    'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7'
+    col1, col2 = st.columns(2)
+    with col1:
+        m3u8_url = st.text_input("1. m3u8 주소 (FetchV에서 복사)", placeholder="https://videos.theboda1.com/...")
+    with col2:
+        referer_url = st.text_input("2. 원본 사이트 주소 (지금 보고 있는 곳)", placeholder="https://www.bbtv86.com/...")
+
+    if m3u8_url and st.button("📥 보안 뚫고 다운로드"):
+        if not referer_url:
+            st.warning("⚠️ '원본 사이트 주소'를 입력해야 403 에러가 안 납니다! (주소창 복사해서 넣으세요)")
+        else:
+            with st.spinner("서버를 속여서 영상을 가져오는 중..."):
+                ydl_opts = {
+                    'outtmpl': os.path.join(tempfile.gettempdir(), 'download.%(ext)s'),
+                    'format': 'best',
+                    'noplaylist': True,
+                    # [비법] 헤더에 출처(Referer)를 명시하여 봇이 아닌 척 위장
+                    'http_headers': {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                        'Referer': referer_url, 
+                        'Origin': referer_url,
+                        'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7'
+                    }
                 }
-            }
-            try:
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    info = ydl.extract_info(url_input, download=True)
-                    st.session_state['video_path'] = ydl.prepare_filename(info)
-                    st.success("✅ 추출 성공! (보안 뚫음)")
-            except Exception as e: 
-                st.error(f"❌ 실패: {e}")
-                st.warning("이 사이트는 'm3u8(스트리밍 주소)'를 직접 넣어야 할 수 있습니다.")
+                try:
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        info = ydl.extract_info(m3u8_url, download=True)
+                        st.session_state['video_path'] = ydl.prepare_filename(info)
+                        st.success("✅ 403 우회 성공! 다운로드 완료.")
+                except Exception as e: 
+                    st.error(f"❌ 실패: {e}")
+                    st.error("이 사이트는 쿠키(로그인 정보)까지 요구하는 것 같습니다. PC에서 다운받아 올리는 걸 추천합니다.")
 
 with tab_file:
     local_files = [f for f in os.listdir('.') if f.endswith(('.mp4', '.mkv', '.avi', '.mov'))]
@@ -79,7 +87,7 @@ with tab_file:
     if selected_local != "선택안함":
         video_path = os.path.abspath(selected_local)
 
-# --- 분석 시작 로직 (Resume 기능 포함) ---
+# --- 분석 시작 로직 (Resume 포함) ---
 if st.session_state.get('video_path') or video_path:
     final_path = st.session_state.get('video_path') or video_path
     st.divider()
@@ -90,7 +98,6 @@ if st.session_state.get('video_path') or video_path:
         save_path = os.path.join(progress_dir, file_id)
         if not os.path.exists(save_path): os.makedirs(save_path)
 
-        # 길이 분석
         try:
             res = subprocess.run([ffmpeg_cmd, '-i', final_path], stderr=subprocess.PIPE, text=True)
             total_duration = int(float(re.search(r"Duration: (\d{2}):(\d{2}):(\d{2})", res.stderr).groups()[0]) * 3600 + float(re.search(r"Duration: (\d{2}):(\d{2}):(\d{2})", res.stderr).groups()[1]) * 60 + float(re.search(r"Duration: (\d{2}):(\d{2}):(\d{2})", res.stderr).groups()[2]))
