@@ -111,7 +111,7 @@ if files and st.button("🚀 클라우드 분석 시작"):
                                 v_p, c_p = os.path.join(tmpdir, f"v_{code}.mp3"), os.path.join(tmpdir, f"c_{code}.mp4")
                                 asyncio.run(edge_tts.Communicate(data['scripts'][code], VOICES[l_n]).save(v_p))
                                 h = data['highlights'][0]
-                                subprocess.run([ffmpeg_cmd, '-y', '-ss', str(h['start']), '-t', str(h['end']-h['start']), '-i', original_path, '-vf', 'scale=1280:-1', '-c:v', 'libx264', '-preset', 'ultrafast', c_p], capture_output=True)
+                                subprocess.run([ffmpeg_cmd, '-y', '-ss', str(h['start']), '-t', str(h['end']-h['start']), '-i', original_path, '-vf', 'scale=1920:-1', '-c:v', 'libx264', '-preset', 'ultrafast', c_p], capture_output=True)
                                 subprocess.run([ffmpeg_cmd, '-y', '-i', c_p, '-i', v_p, '-c:v', 'copy', '-c:a', 'aac', '-shortest', out_name], capture_output=True)
                                 with open(out_name, "rb") as f:
                                     st.download_button(f"📥 {l_n} 다운로드", f, file_name=out_name)
