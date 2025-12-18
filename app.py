@@ -5,9 +5,9 @@ from itertools import cycle
 from PIL import Image
 import yt_dlp
 
-# --- 통합 공장 설정 ---
-st.set_page_config(page_title="Final Drama Factory", layout="wide")
-st.title("🏭 깃허브 통합 드라마 공장 (413 에러 해결판)")
+# --- 설정 ---
+st.set_page_config(page_title="URL Loader Factory", layout="wide")
+st.title("🔗 URL 영상 추출 & AI 분석 공장")
 
 API_KEYS = [
     "AIzaSyBV9HQYl_oeQBJVWJ4DAiW0rE5BqLFr15I",
@@ -21,7 +21,7 @@ def get_next_client(): return genai.Client(api_key=next(key_pool)), next(key_poo
 def get_ffmpeg(): return shutil.which("ffmpeg") or "ffmpeg"
 ffmpeg_cmd = get_ffmpeg()
 
-# --- 하이브리드 분석 엔진 ---
+# --- 하이브리드 엔진 ---
 def generate_content_safe(client, images, prompt):
     models = ["gemini-1.5-flash", "gemini-2.0-flash"]
     for model_name in models:
@@ -40,84 +40,78 @@ def extract_smart_frames(input_path, output_dir, start_sec, duration=60):
     return [os.path.join(chunk_folder, f) for f in sorted(os.listdir(chunk_folder)) if f.endswith(".jpg")]
 
 # --- 메인 로직 ---
-tab1, tab2, tab3 = st.tabs(["📂 직접 선택 (413 해결)", "🔗 URL 다운로드", "📤 일반 업로드"])
+url = st.text_input("분석할 영상의 주소 (URL) 입력:", placeholder="예: https://www.youtube.com/watch?v=...")
 video_path = None
 tmpdir = tempfile.mkdtemp()
 
-with tab1:
-    st.info("💡 왼쪽 파일 목록에 드래그&드롭한 영상을 여기서 선택하세요.")
-    # 현재 폴더에 있는 영상 파일 자동 감지
-    local_files = [f for f in os.listdir('.') if f.endswith(('.mp4', '.mkv', '.avi', '.mov'))]
-    selected_file = st.selectbox("분석할 파일 선택", ["선택안함"] + local_files)
-    if selected_file != "선택안함":
-        video_path = os.path.abspath(selected_file)
-        st.success(f"✅ 파일 로드 완료: {selected_file}")
+if url and st.button("📥 영상 추출 및 로드"):
+    with st.spinner("서버가 영상을 다운로드 중입니다... (PC 용량 사용 X)"):
+        # 480p 정도로 받아서 속도 최적화 (분석용)
+        ydl_opts = {
+            'outtmpl': os.path.join(tmpdir, 'download.%(ext)s'),
+            'format': 'best[ext=mp4]/best',
+            'noplaylist': True
+        }
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=True)
+                video_path = ydl.prepare_filename(info)
+                st.session_state['video_path'] = video_path # 저장
+                st.success(f"✅ 다운로드 성공! (파일: {os.path.basename(video_path)})")
+        except Exception as e:
+            st.error(f"❌ 다운로드 실패: {e}")
+            st.warning("이 사이트는 보안이 강력해서 추출이 불가능할 수 있습니다. (유튜브 등으로 테스트 해보세요)")
 
-with tab2:
-    url = st.text_input("영상 주소 (http://...)")
-    if url and st.button("영상 추출하기"):
-        with st.spinner("다운로드 중..."):
-            ydl_opts = {'outtmpl': os.path.join(tmpdir, 'download.%(ext)s'), 'format': 'best[ext=mp4]'}
-            try:
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    info = ydl.extract_info(url, download=True)
-                    video_path = ydl.prepare_filename(info)
-                    st.success("✅ 다운로드 성공!")
-            except Exception as e: st.error(f"실패: {e}")
-
-with tab3:
-    up_file = st.file_uploader("작은 파일 업로드 (200MB 이하)", accept_multiple_files=False)
-    if up_file:
-        video_path = os.path.join(tmpdir, up_file.name)
-        with open(video_path, "wb") as f: f.write(up_file.read())
-        st.success("✅ 업로드 완료")
-
-if video_path and st.button("🚀 통합 분석 시작"):
-    st.divider()
+# 이미 다운로드된 영상이 있으면 분석 버튼 표시
+if st.session_state.get('video_path'):
+    video_path = st.session_state['video_path']
+    st.info(f"현재 준비된 영상: {os.path.basename(video_path)}")
     
-    # 영상 길이 확인
-    try:
-        res = subprocess.run([ffmpeg_cmd, '-i', video_path], stderr=subprocess.PIPE, text=True)
-        total_duration = int(float(re.search(r"Duration: (\d{2}):(\d{2}):(\d{2})", res.stderr).groups()[0]) * 3600 + float(re.search(r"Duration: (\d{2}):(\d{2}):(\d{2})", res.stderr).groups()[1]) * 60 + float(re.search(r"Duration: (\d{2}):(\d{2}):(\d{2})", res.stderr).groups()[2]))
-    except: total_duration = 3600
+    if st.button("🚀 AI 분석 시작"):
+        st.divider()
+        # 영상 길이 확인
+        try:
+            res = subprocess.run([ffmpeg_cmd, '-i', video_path], stderr=subprocess.PIPE, text=True)
+            total_duration = int(float(re.search(r"Duration: (\d{2}):(\d{2}):(\d{2})", res.stderr).groups()[0]) * 3600 + float(re.search(r"Duration: (\d{2}):(\d{2}):(\d{2})", res.stderr).groups()[1]) * 60 + float(re.search(r"Duration: (\d{2}):(\d{2}):(\d{2})", res.stderr).groups()[2]))
+        except: total_duration = 3600
 
-    chunk_summaries = []
-    for start in range(0, total_duration, 60):
-        with st.status(f"☁️ {start//60}분대 정밀 분석...", expanded=False) as status:
-            frames = extract_smart_frames(video_path, tmpdir, start)
-            if len(frames) > 30: frames = frames[::len(frames)//30]
-            if not frames: continue
-            
-            images = [Image.open(p) for p in frames]
-            success = False
-            while not success:
+        chunk_summaries = []
+        for start in range(0, total_duration, 60):
+            with st.status(f"☁️ {start//60}분대 분석 중...", expanded=False) as status:
+                frames = extract_smart_frames(video_path, tmpdir, start)
+                if len(frames) > 30: frames = frames[::len(frames)//30]
+                if not frames: continue
+                
+                images = [Image.open(p) for p in frames]
+                success = False
+                while not success:
+                    client, _ = get_next_client()
+                    try:
+                        text = generate_content_safe(client, images, "이 구간 요약해줘")
+                        if text: chunk_summaries.append(text); success = True
+                        else: break
+                    except: time.sleep(1)
+        
+        if chunk_summaries:
+            with st.spinner("🎬 최종 결과물 생성 중..."):
                 client, _ = get_next_client()
-                try:
-                    text = generate_content_safe(client, images, "이 구간 요약해줘")
-                    if text: chunk_summaries.append(text); success = True
-                    else: break
-                except: time.sleep(1)
-    
-    if chunk_summaries:
-        with st.spinner("🎬 최종 렌더링..."):
-            client, _ = get_next_client()
-            final_prompt = f"3개국어(ko,en,es) 대본, 하이라이트, 제목 JSON으로: {' '.join(chunk_summaries)}"
-            for _ in range(3):
-                try:
-                    data = json.loads(generate_content_safe(client, [], final_prompt).replace("```json", "").replace("```", "").strip())
-                    break
-                except: time.sleep(1)
-            
-            if data:
-                tabs = st.tabs(["🇰🇷", "🇺🇸", "🇪🇸"])
-                for i, (l_n, code) in enumerate([("Korean", "ko"), ("English", "en"), ("Spanish", "es")]):
-                    with tabs[i]:
-                        try:
-                            out_name = f"{data['titles'][code]}.mp4"
-                            v_p, c_p = os.path.join(tmpdir, f"v_{code}.mp3"), os.path.join(tmpdir, f"c_{code}.mp4")
-                            asyncio.run(edge_tts.Communicate(data['scripts'][code], VOICES[l_n]).save(v_p))
-                            h = data['highlights'][0]
-                            subprocess.run([ffmpeg_cmd, '-y', '-ss', str(h['start']), '-t', str(h['end']-h['start']), '-i', video_path, '-vf', 'scale=1280:-1', '-c:v', 'libx264', '-preset', 'ultrafast', c_p], capture_output=True)
-                            subprocess.run([ffmpeg_cmd, '-y', '-i', c_p, '-i', v_p, '-c:v', 'copy', '-c:a', 'aac', '-shortest', out_name], capture_output=True)
-                            with open(out_name, "rb") as f: st.download_button(f"📥 {l_n} 다운로드", f, file_name=out_name)
-                        except: pass
+                final_prompt = f"3개국어(ko,en,es) 대본, 하이라이트, 제목 JSON으로: {' '.join(chunk_summaries)}"
+                for _ in range(3):
+                    try:
+                        data = json.loads(generate_content_safe(client, [], final_prompt).replace("```json", "").replace("```", "").strip())
+                        break
+                    except: time.sleep(1)
+                
+                if data:
+                    tabs = st.tabs(["🇰🇷", "🇺🇸", "🇪🇸"])
+                    for i, (l_n, code) in enumerate([("Korean", "ko"), ("English", "en"), ("Spanish", "es")]):
+                        with tabs[i]:
+                            try:
+                                out_name = f"{data['titles'][code]}.mp4"
+                                v_p, c_p = os.path.join(tmpdir, f"v_{code}.mp3"), os.path.join(tmpdir, f"c_{code}.mp4")
+                                asyncio.run(edge_tts.Communicate(data['scripts'][code], VOICES[l_n]).save(v_p))
+                                h = data['highlights'][0]
+                                subprocess.run([ffmpeg_cmd, '-y', '-ss', str(h['start']), '-t', str(h['end']-h['start']), '-i', video_path, '-vf', 'scale=1280:-1', '-c:v', 'libx264', '-preset', 'ultrafast', c_p], capture_output=True)
+                                subprocess.run([ffmpeg_cmd, '-y', '-i', c_p, '-i', v_p, '-c:v', 'copy', '-c:a', 'aac', '-shortest', out_name], capture_output=True)
+                                with open(out_name, "rb") as f: st.download_button(f"📥 {l_n} 다운로드", f, file_name=out_name)
+                            except: pass
