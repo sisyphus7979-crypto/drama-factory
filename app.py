@@ -6,8 +6,8 @@ from PIL import Image
 import yt_dlp
 
 # --- 설정 ---
-st.set_page_config(page_title="Advanced Downloader", layout="wide")
-st.title("🏭 고급형 드라마 공장 (403 우회 기능 탑재)")
+st.set_page_config(page_title="Cookie Master Factory", layout="wide")
+st.title("🏭 쿠키(신분증) 탑재 드라마 공장")
 
 API_KEYS = [
     "AIzaSyBV9HQYl_oeQBJVWJ4DAiW0rE5BqLFr15I",
@@ -40,46 +40,50 @@ def extract_smart_frames(input_path, output_dir, start_sec, duration=60):
     return [os.path.join(chunk_folder, f) for f in sorted(os.listdir(chunk_folder)) if f.endswith(".jpg")]
 
 # --- 메인 로직 ---
-tab_url, tab_file = st.tabs(["🔗 고급 URL 추출", "📂 파일 선택 (Resume)"])
+tab_url, tab_file = st.tabs(["🍪 쿠키로 뚫기 (고급)", "📂 파일 직접 선택 (추천)"])
 video_path = None
 progress_dir = "analysis_progress"
 if not os.path.exists(progress_dir): os.makedirs(progress_dir)
 
-# [핵심] 403 에러 우회를 위한 Referer 입력 추가
+# [핵심] 쿠키 파일 업로드 기능 추가
 with tab_url:
-    st.info("💡 팁: 'm3u8 주소'와 영상을 보고 있던 '웹사이트 주소'를 둘 다 넣어야 뚫립니다.")
+    st.info("💡 1. PC에서 'Get cookies.txt'로 쿠키 파일을 만드세요.\n💡 2. 그 파일을 아래에 업로드하고 주소를 넣으세요.")
     
-    col1, col2 = st.columns(2)
+    col1, col2 = st.columns([1, 2])
     with col1:
-        m3u8_url = st.text_input("1. m3u8 주소 (FetchV에서 복사)", placeholder="https://videos.theboda1.com/...")
+        cookie_file = st.file_uploader("쿠키 파일 업로드 (.txt)", type=["txt"])
     with col2:
-        referer_url = st.text_input("2. 원본 사이트 주소 (지금 보고 있는 곳)", placeholder="https://www.bbtv86.com/...")
+        target_url = st.text_input("m3u8 주소 (FetchV)", placeholder="https://...")
+        referer_url = st.text_input("원본 사이트 주소 (Referer)", placeholder="https://bbtv86.com/...")
 
-    if m3u8_url and st.button("📥 보안 뚫고 다운로드"):
-        if not referer_url:
-            st.warning("⚠️ '원본 사이트 주소'를 입력해야 403 에러가 안 납니다! (주소창 복사해서 넣으세요)")
-        else:
-            with st.spinner("서버를 속여서 영상을 가져오는 중..."):
-                ydl_opts = {
-                    'outtmpl': os.path.join(tempfile.gettempdir(), 'download.%(ext)s'),
-                    'format': 'best',
-                    'noplaylist': True,
-                    # [비법] 헤더에 출처(Referer)를 명시하여 봇이 아닌 척 위장
-                    'http_headers': {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                        'Referer': referer_url, 
-                        'Origin': referer_url,
-                        'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7'
-                    }
+    if target_url and st.button("📥 신분증 내고 다운로드"):
+        cookie_path = None
+        if cookie_file:
+            cookie_path = os.path.join(tempfile.gettempdir(), "cookies.txt")
+            with open(cookie_path, "wb") as f: f.write(cookie_file.read())
+
+        with st.spinner("서버가 신분증(쿠키)을 제출하며 접근 중..."):
+            ydl_opts = {
+                'outtmpl': os.path.join(tempfile.gettempdir(), 'download.%(ext)s'),
+                'format': 'best',
+                'noplaylist': True,
+                'http_headers': {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Referer': referer_url if referer_url else target_url
                 }
-                try:
-                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                        info = ydl.extract_info(m3u8_url, download=True)
-                        st.session_state['video_path'] = ydl.prepare_filename(info)
-                        st.success("✅ 403 우회 성공! 다운로드 완료.")
-                except Exception as e: 
-                    st.error(f"❌ 실패: {e}")
-                    st.error("이 사이트는 쿠키(로그인 정보)까지 요구하는 것 같습니다. PC에서 다운받아 올리는 걸 추천합니다.")
+            }
+            # 쿠키 파일이 있으면 옵션에 추가
+            if cookie_path:
+                ydl_opts['cookiefile'] = cookie_path
+
+            try:
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    info = ydl.extract_info(target_url, download=True)
+                    st.session_state['video_path'] = ydl.prepare_filename(info)
+                    st.success("✅ 신분증 확인 성공! 다운로드 완료.")
+            except Exception as e: 
+                st.error(f"❌ 실패: {e}")
+                st.error("이 사이트는 'IP 주소'를 너무 엄격하게 체크해서 외부 서버 다운로드를 원천 봉쇄한 것 같습니다.")
 
 with tab_file:
     local_files = [f for f in os.listdir('.') if f.endswith(('.mp4', '.mkv', '.avi', '.mov'))]
@@ -87,7 +91,7 @@ with tab_file:
     if selected_local != "선택안함":
         video_path = os.path.abspath(selected_local)
 
-# --- 분석 시작 로직 (Resume 포함) ---
+# --- 분석 시작 로직 ---
 if st.session_state.get('video_path') or video_path:
     final_path = st.session_state.get('video_path') or video_path
     st.divider()
@@ -109,7 +113,6 @@ if st.session_state.get('video_path') or video_path:
         for start in range(0, total_duration, 60):
             p_bar.progress(min(start / total_duration, 1.0))
             save_file = os.path.join(save_path, f"{start}.txt")
-            
             if os.path.exists(save_file):
                 with open(save_file, "r", encoding="utf-8") as f: chunk_summaries.append(f.read())
                 continue
@@ -117,7 +120,6 @@ if st.session_state.get('video_path') or video_path:
             with st.status(f"⚡ {start//60}분대 분석 중...", expanded=False) as status:
                 frames = extract_smart_frames(final_path, save_path, start)
                 if len(frames) > 30: frames = frames[::len(frames)//30]
-                
                 if not frames:
                     with open(save_file, "w", encoding="utf-8") as f: f.write("")
                     continue
@@ -146,7 +148,6 @@ if st.session_state.get('video_path') or video_path:
                         data = json.loads(generate_content_safe(client, [], final_prompt).replace("```json", "").replace("```", "").strip())
                         break
                     except: time.sleep(1)
-                
                 if data:
                     tabs = st.tabs(["🇰🇷", "🇺🇸", "🇪🇸"])
                     for i, (l_n, code) in enumerate([("Korean", "ko"), ("English", "en"), ("Spanish", "es")]):
